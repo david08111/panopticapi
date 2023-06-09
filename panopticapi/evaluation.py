@@ -11,6 +11,7 @@ from datetime import timedelta
 from collections import defaultdict
 import argparse
 import multiprocessing
+import cv2
 
 import PIL.Image as Image
 
@@ -83,10 +84,23 @@ def pq_compute_single_core(proc_id, annotation_set, gt_folder, pred_folder, cate
             print('Core: {}, {} from {} images processed'.format(proc_id, idx, len(annotation_set)))
         idx += 1
 
-        pan_gt = np.array(Image.open(os.path.join(gt_folder, gt_ann['file_name'])), dtype=np.uint32)
-        pan_gt = rgb2id(pan_gt)
         pan_pred = np.array(Image.open(os.path.join(pred_folder, pred_ann['file_name'])), dtype=np.uint32)
         pan_pred = rgb2id(pan_pred)
+
+        pan_gt = np.array(Image.open(os.path.join(gt_folder, gt_ann['file_name'])))
+
+        if pan_gt.shape != pan_pred.shape:
+
+            resize_factor = (pan_gt.shape[0] * pan_gt.shape[1]) / (pan_pred.shape[0] * pan_pred.shape[1])
+            # need to change Area of segments too !
+            pan_gt = cv2.resize(pan_gt, (pan_pred.shape[1], pan_pred.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+
+            for segment in gt_ann["segments_info"]:
+                segment["area"] = int(np.round(segment["area"] / resize_factor))
+
+        pan_gt = np.array(pan_gt, dtype=np.uint32)
+        pan_gt = rgb2id(pan_gt)
 
         gt_segms = {el['id']: el for el in gt_ann['segments_info']}
         pred_segms = {el['id']: el for el in pred_ann['segments_info']}
@@ -239,6 +253,7 @@ def pq_compute(gt_json_file, pred_json_file, gt_folder=None, pred_folder=None):
     t_delta = time.time() - start_time
     print("Time elapsed: {:0.2f} seconds".format(t_delta))
 
+    results["categories"] = categories
     return results
 
 
